@@ -1,0 +1,225 @@
+<!-- templates/result.html -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Detection Results - BeautyAI</title>
+    <style>
+        /* Existing styles */
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f2f2f2;
+            text-align: center;
+            padding-top: 20px;
+        }
+        .result-container {
+            background-color: #fff;
+            padding: 20px;
+            margin: auto;
+            width: 80%;
+            border-radius: 10px;
+            box-shadow: 0 0 10px rgba(0,0,0,0.1);
+        }
+        img {
+            max-width: 100%;
+            height: auto;
+            border-radius: 10px;
+        }
+        table {
+            margin: 20px auto;
+            border-collapse: collapse;
+            width: 80%;
+        }
+        th, td {
+            border: 1px solid #ddd;
+            padding: 8px;
+        }
+        th {
+            background-color: #4CAF50;
+            color: white;
+        }
+        a {
+            display: inline-block;
+            margin-top: 20px;
+            padding: 10px 20px;
+            background-color: #2196F3;
+            color: #fff;
+            text-decoration: none;
+            border-radius: 5px;
+        }
+        a:hover {
+            background-color: #0b7dda;
+        }
+        /* Chat styles */
+        .chat-container {
+            margin-top: 30px;
+            width: 100%;
+            max-width: 800px;
+            background-color: #fff;
+            border-radius: 10px;
+            box-shadow: 0 0 10px rgba(0,0,0,0.1);
+            display: flex;
+            flex-direction: column;
+            height: 400px;
+            overflow: hidden;
+        }
+        .chat-messages {
+            flex: 1;
+            padding: 15px;
+            overflow-y: auto;
+            border-bottom: 1px solid #ddd;
+            text-align: left;
+        }
+        .chat-input {
+            display: flex;
+        }
+        .chat-input textarea {
+            flex: 1;
+            padding: 10px;
+            border: none;
+            resize: none;
+            font-size: 16px;
+        }
+        .chat-input button {
+            padding: 10px 20px;
+            background-color: #4CAF50;
+            border: none;
+            color: #fff;
+            cursor: pointer;
+            font-size: 16px;
+        }
+        .chat-input button:hover {
+            background-color: #45a049;
+        }
+        .message {
+            margin-bottom: 15px;
+            display: flex;
+        }
+        .message.user .message-content {
+            background-color: #dcf8c6;
+            align-self: flex-end;
+        }
+        .message.assistant .message-content {
+            background-color: #f1f0f0;
+            align-self: flex-start;
+        }
+        .message-content {
+            padding: 10px 15px;
+            border-radius: 10px;
+            max-width: 70%;
+            word-wrap: break-word;
+        }
+    </style>
+</head>
+<body>
+    <div class="result-container">
+        <h1>Detection Results</h1>
+        {% if annotated_image %}
+            <img src="{{ annotated_image }}" alt="Annotated Image">
+        {% endif %}
+        {% if detections %}
+            <h2>Detected Acne Lesions</h2>
+            <table>
+                <tr>
+                    <th>Class</th>
+                    <th>Confidence</th>
+                    <th>Bounding Box (x1, y1, x2, y2)</th>
+                </tr>
+                {% for det in detections %}
+                <tr>
+                    <td>{{ det.name }}</td>
+                    <td>{{ det.confidence }}</td>
+                    <td>({{ det.xmin }}, {{ det.ymin }}, {{ det.xmax }}, {{ det.ymax }})</td>
+                </tr>
+                {% endfor %}
+            </table>
+        {% else %}
+            <h2>No Acne Lesions Detected</h2>
+        {% endif %}
+        <a href="/">Upload Another Image</a>
+
+        <!-- Chat Interface -->
+        <div class="chat-container">
+            <div class="chat-messages" id="chat-messages">
+                <!-- Messages will appear here -->
+                {% for message in chat_history %}
+                    {% if message.role == 'user' %}
+                        <div class="message user">
+                            <div class="message-content">{{ message.content }}</div>
+                        </div>
+                    {% elif message.role == 'assistant' %}
+                        <div class="message assistant">
+                            <div class="message-content">{{ message.content }}</div>
+                        </div>
+                    {% endif %}
+                {% endfor %}
+            </div>
+            <div class="chat-input">
+                <textarea id="message-input" rows="2" placeholder="Type your message..."></textarea>
+                <button id="send-button">Send</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const sendButton = document.getElementById('send-button');
+        const messageInput = document.getElementById('message-input');
+        const chatMessages = document.getElementById('chat-messages');
+
+        sendButton.addEventListener('click', sendMessage);
+        messageInput.addEventListener('keypress', function(e) {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                sendMessage();
+            }
+        });
+
+        function appendMessage(role, content) {
+            const messageDiv = document.createElement('div');
+            messageDiv.classList.add('message', role);
+
+            const contentDiv = document.createElement('div');
+            contentDiv.classList.add('message-content');
+            contentDiv.textContent = content;
+
+            messageDiv.appendChild(contentDiv);
+            chatMessages.appendChild(messageDiv);
+
+            // Scroll to the bottom
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+        }
+
+        function sendMessage() {
+            const message = messageInput.value.trim();
+            if (message === '') return;
+
+            appendMessage('user', message);
+            messageInput.value = '';
+
+            // Send the message to the server
+            fetch('/chat/message', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                },
+                body: new URLSearchParams({
+                    'message': message
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.error) {
+                    appendMessage('assistant', "Sorry, something went wrong. Please try again.");
+                    console.error(data.error);
+                } else {
+                    appendMessage('assistant', data.message);
+                }
+            })
+            .catch(error => {
+                appendMessage('assistant', "Sorry, I couldn't process your request.");
+                console.error('Error:', error);
+            });
+        }
+    </script>
+</body>
+</html>

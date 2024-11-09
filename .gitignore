@@ -1,0 +1,4 @@
+.env
+/models/best.onnx
+/models/best.pt
+/venv/*
